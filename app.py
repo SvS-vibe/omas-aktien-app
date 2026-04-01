@@ -3,35 +3,23 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 import streamlit as st
-import requests
 
 # --- STREAMLIT PAGE CONFIG ---
-# Das sorgt für ein breites Layout und ein schönes Icon im Browser-Tab
 st.set_page_config(
     page_title="Omas Aktien-Mentor v2",
     page_icon="👵",
     layout="wide"
 )
 
-# --- FIX FÜR RATE LIMITS ---
-# Wir erstellen eine Session mit einem "User-Agent". 
-# Das täuscht Yahoo Finance vor, dass ein Mensch im Browser anfragt, kein Bot.
-@st.cache_resource
-def get_session():
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-    })
-    return session
-
 # --- DATA FETCHING ---
-@st.cache_data(ttl=3600) # Cache speichert Daten für 1 Stunde, um API-Abfragen zu sparen
+@st.cache_data(ttl=3600) # Cache speichert Daten für 1 Stunde
 def fetch_stock_data(symbol, period="180d", interval="1d"):
-    """Zieht Kursdaten von Yahoo Finance mit integrierter Fehlerbehandlung."""
+    """Zieht Kursdaten von Yahoo Finance. Die Session-Logik wurde entfernt, da YF dies nun intern regelt."""
     try:
-        session = get_session()
-        stock = yf.Ticker(symbol, session=session)
+        # Wir rufen yfinance direkt auf, ohne manuelle Requests-Session
+        stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
+        
         if data.empty:
             return pd.DataFrame()
         return data
@@ -64,7 +52,6 @@ def generate_signals(df):
     df.loc[df['SMA_Kurz'] <= df['SMA_Lang'], 'Signal_Score'] = -1
     
     # Volumen-Bestätigung: Ist heute besonders viel los?
-    # Wenn ja, verstärken wir das Signal (Big Data Value)
     volume_ok = (df['Volume'] > df['Vol_Durchschnitt'])
     df.loc[volume_ok & (df['Signal_Score'] > 0), 'Signal_Score'] += 1
     df.loc[volume_ok & (df['Signal_Score'] < 0), 'Signal_Score'] -= 1
