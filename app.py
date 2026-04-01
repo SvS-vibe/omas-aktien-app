@@ -14,9 +14,8 @@ st.set_page_config(
 # --- DATA FETCHING ---
 @st.cache_data(ttl=3600) # Cache speichert Daten für 1 Stunde
 def fetch_stock_data(symbol, period="180d", interval="1d"):
-    """Zieht Kursdaten von Yahoo Finance. Die Session-Logik wurde entfernt, da YF dies nun intern regelt."""
+    """Zieht Kursdaten von Yahoo Finance."""
     try:
-        # Wir rufen yfinance direkt auf, ohne manuelle Requests-Session
         stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
         
@@ -80,19 +79,41 @@ def plot_dashboard(df, symbol):
 
 # --- HAUPTPROGRAMM (Streamlit UI) ---
 def main():
-    st.title("👵 Omas KI-Aktien-Assistent")
+    st.title("📈 KI-Aktien-Mentor für Oma")
     st.write("Willkommen! Ich helfe dir, den Überblick an der Börse zu behalten.")
+
+    # Top-Liste für das klickbare Band
+    top_tech_companies = {
+        'Apple': 'AAPL',
+        'Microsoft': 'MSFT',
+        'Amazon': 'AMZN',
+        'Alphabet': 'GOOGL',
+        'NVIDIA': 'NVDA',
+        'Tesla': 'TSLA',
+        'Meta': 'META',
+        'Bitcoin': 'BTC-USD',
+        'S&P 500': 'SPY',
+        'Nasdaq': 'QQQ'
+    }
+
+    # Initialisierung des Session State für den Ticker, falls noch nicht vorhanden
+    if 'current_ticker' not in st.session_state:
+        st.session_state.current_ticker = "AAPL"
 
     # Eingabebereich in der Seitenleiste
     st.sidebar.header("Suche")
-    ticker = st.sidebar.text_input("Welche Aktie suchst du? (Kürzel)", value="AAPL").upper()
+    ticker_input = st.sidebar.text_input("Welche Aktie suchst du? (Kürzel)", value=st.session_state.current_ticker).upper()
     
+    # Wenn der User manuell tippt, aktualisieren wir den State
+    if ticker_input != st.session_state.current_ticker:
+        st.session_state.current_ticker = ticker_input
+
     if st.sidebar.button("Daten aktualisieren"):
         st.cache_data.clear()
 
     # Analyse-Start
     with st.spinner('Ich schaue kurz an der Börse nach...'):
-        df = fetch_stock_data(ticker)
+        df = fetch_stock_data(st.session_state.current_ticker)
         
         if not df.empty and len(df) > 20:
             df = calculate_indicators(df)
@@ -118,10 +139,21 @@ def main():
                 st.info("💡 **Was das bedeutet:** Es ist gerade ruhig an der Börse. Kein Grund zur Eile.")
                 
             # Chart anzeigen
-            st.pyplot(plot_dashboard(df, ticker))
+            st.pyplot(plot_dashboard(df, st.session_state.current_ticker))
+            
+            # --- NEUES FEATURE: Das klickbare Aktien-Band ---
+            st.divider()
+            st.subheader("Schnellauswahl: Klicke auf ein Unternehmen für die Analyse")
+            
+            # Wir erstellen mehrere Spalten für das Band
+            cols = st.columns(len(top_tech_companies))
+            for i, (name, sym) in enumerate(top_tech_companies.items()):
+                if cols[i].button(name, key=f"btn_{sym}"):
+                    st.session_state.current_ticker = sym
+                    st.rerun() # App neu starten mit dem neuen Ticker
             
         else:
-            st.error("Entschuldige, ich konnte für dieses Kürzel keine Daten finden. Probiere es mal mit 'AAPL' (Apple) oder 'MSFT' (Microsoft).")
+            st.error(f"Entschuldige, ich konnte für '{st.session_state.current_ticker}' keine Daten finden. Probiere es mal mit 'AAPL' (Apple) oder 'MSFT' (Microsoft).")
 
 if __name__ == "__main__":
     main()
